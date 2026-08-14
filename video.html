@@ -129,7 +129,7 @@
   /* ---- states ---- */
   .state{padding:60px 0;text-align:center}
   .state h2{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.06em;font-size:26px;margin:0 0 8px}
-  .state p{color:var(--muted);margin:0 auto;max-width:420px}
+  .state p{color:var(--muted);margin:0 auto;max-width:520px;word-break:break-word}
   .skeleton{height:14px;border-radius:6px;background:linear-gradient(90deg,#141c27,#1b2532,#141c27);background-size:200% 100%;animation:sh 1.4s ease infinite}
   @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
   .foot{margin-top:34px;color:var(--dim);font-size:12.5px;border-top:1px solid var(--line-soft);padding-top:14px}
@@ -314,6 +314,7 @@
     document.getElementById('root').innerHTML =
       '<div class="state"><h2>' + title + '</h2><p>' + message + '</p></div>';
   }
+  window.addEventListener('online', function(){ load(); });
 
   function stamp(){
     var el = document.getElementById('fresh');
@@ -332,22 +333,40 @@
     }
     fetch('/api/video?id=' + encodeURIComponent(id))
       .then(function(r){
-        return r.json().then(function(j){ return { ok:r.ok, status:r.status, body:j }; });
+        return r.text().then(function(t){ return { ok:r.ok, status:r.status, text:t }; });
       })
       .then(function(res){
-        if (res.status === 404){
+        var data = null;
+        try { data = JSON.parse(res.text); } catch (e) { data = null; }
+
+        if (data === null){
+          state('The data endpoint is not responding',
+                'The page loaded but /api/video returned HTTP ' + res.status +
+                ' with this instead of data: <br><br><code style="color:#8492a4;font-size:12.5px">' +
+                esc(res.text.slice(0,160)) + '</code>');
+          return;
+        }
+        if (res.status === 404 || data.error === 'not_found'){
           state('Video not found', 'This card may have been deleted or moved to another board. Ask in your Discord channel for a fresh link.');
           return;
         }
         if (!res.ok){
-          state('Cannot load this video', 'Something broke on the way to Notion. Try again in a minute.');
+          state('Cannot load this video',
+                (data.error === 'notion_error' ? 'Notion rejected the request. Usually the NOTION_TOKEN belongs to a different integration than the one connected to the boards.' :
+                 data.error === 'bad_id' ? 'The video ID on this link is not a valid Notion page ID.' :
+                 'Something broke on the way to Notion.') +
+                '<br><br><code style="color:#8492a4;font-size:12.5px">' + esc(String(data.message || data.error || '')).slice(0,200) + '</code>');
           return;
         }
-        render(res.body);
+        render(data);
         stamp();
       })
-      .catch(function(){
-        state('You are offline', 'Reconnect and this page will load the brief.');
+      .catch(function(err){
+        if (!navigator.onLine){
+          state('You are offline', 'Reconnect and this page will load the brief.');
+        } else {
+          state('Could not reach the server', esc(String(err && err.message ? err.message : err)));
+        }
       });
   }
 
