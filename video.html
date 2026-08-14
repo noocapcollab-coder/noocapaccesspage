@@ -238,12 +238,6 @@
            '<span class="host">' + esc(host(url)) + '</span></span></a>';
   }
 
-  function cell(label, value){
-    var empty = !value;
-    return '<div class="cell"><dt>' + label + '</dt><dd class="' + (empty ? 'empty' : '') + '">' +
-           esc(empty ? 'Not set' : value) + '</dd></div>';
-  }
-
   function render(v){
     var idx = stageIndex(v.status);
     var isSponsor = /sponsor/i.test(v.type || '');
@@ -292,17 +286,6 @@
     if (v.notes){
       html += '<section><h2 class="label">Notes</h2><div class="card"><p>' + esc(v.notes) + '</p></div></section>';
     }
-
-    html += '<section><h2 class="label">Details</h2><dl class="meta">';
-    html += cell('Editor', v.editor);
-    html += cell('Post date', niceDate(v.postDate));
-    html += cell('Due date', niceDate(v.dueDate));
-    html += cell('Priority', v.priority);
-    html += cell('Effort', v.effort);
-    html += cell('Format', v.format);
-    html += cell('Revisions', v.revisions);
-    html += cell('Waiting on', v.waitingOn);
-    html += '</dl></section>';
 
     html += '<p class="foot">Read-only view of the production card. Anything that needs changing goes through your channel in Discord.</p>';
 
