@@ -7,7 +7,7 @@ const NOTION = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
 
 const headers = () => ({
-  Authorization: `Bearer ${process.env.NOTION_TOKEN}`,
+  Authorization: `Bearer ${String(process.env.NOTION_TOKEN || '').trim().replace(/^["']|["']$/g, '')}`,
   'Notion-Version': NOTION_VERSION,
   'Content-Type': 'application/json',
 });
@@ -140,6 +140,21 @@ function renderBlocks(results) {
   return out;
 }
 
+// Describes the token without revealing it, so a 401 can be diagnosed from the page.
+function tokenHint() {
+  const t = process.env.NOTION_TOKEN;
+  if (t === undefined) return 'NOTION_TOKEN is not set on this deployment';
+  if (t === '') return 'NOTION_TOKEN is set but empty';
+  const trimmed = t.trim();
+  const bits = [];
+  bits.push('length ' + t.length);
+  bits.push('starts with ' + JSON.stringify(t.slice(0, 4)));
+  if (trimmed.length !== t.length) bits.push('HAS LEADING OR TRAILING WHITESPACE');
+  if (/^["']|["']$/.test(trimmed)) bits.push('WRAPPED IN QUOTES');
+  if (!/^(ntn_|secret_)/.test(trimmed)) bits.push('does not look like a Notion secret');
+  return 'NOTION_TOKEN ' + bits.join(', ');
+}
+
 const cache = new Map(); // id -> { at, payload }
 const TTL = 20000;
 
@@ -167,7 +182,7 @@ module.exports = async (req, res) => {
     }
     if (!pageRes.ok) {
       const body = await pageRes.text();
-      res.status(502).json({ error: 'notion_error', message: body.slice(0, 300) });
+      res.status(502).json({ error: 'notion_error', message: body.slice(0, 300) + ' | ' + tokenHint() });
       return;
     }
     const page = await pageRes.json();
