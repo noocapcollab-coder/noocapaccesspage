@@ -182,7 +182,7 @@ module.exports = async (req, res) => {
     }
     if (!pageRes.ok) {
       const body = await pageRes.text();
-      res.status(502).json({ error: 'notion_error', message: body.slice(0, 300) + ' | ' + tokenHint() });
+      res.status(502).json({ error: 'notion_error', message: tokenHint() + ' || Notion said: ' + body.slice(0, 200) });
       return;
     }
     const page = await pageRes.json();
