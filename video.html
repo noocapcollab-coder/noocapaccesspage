@@ -139,6 +139,9 @@
   .cmt-body code{background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:13px}
   .cmt-body mark{background:#2a1c1c;color:#e8bfbf;padding:1px 4px;border-radius:4px}
   .cmt-note{color:var(--dim);font-size:13px;margin:0}
+  #comments.pinned{margin-top:24px}
+  #comments.pinned .thread{border-color:#3a2a1c;background:linear-gradient(180deg,#161b25,#111823)}
+  #comments.pinned .label{color:var(--personal)}
 
   /* ---- meta grid ---- */
   .meta{display:grid;gap:1px;grid-template-columns:1fr 1fr;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
@@ -323,6 +326,10 @@
             (v.postDate ? ' Goes out ' + esc(niceDate(v.postDate)) + '.' : '') + '</p>';
     html += '</div>';
 
+    // Comments sit first, above the files, so a note for the editor is the first thing read.
+    html += '<section id="comments" class="pinned" hidden><h2 class="label" id="commentsLabel">Comments</h2>' +
+            '<div id="commentsBody"></div></section>';
+
     if (links){
       html += '<section><h2 class="label">Files</h2><div class="links">' + links + '</div></section>';
     }
@@ -330,10 +337,6 @@
     if (brief){
       html += '<section><h2 class="label">Brief</h2><div class="card">' + brief + '</div></section>';
     }
-
-    // Comments land here, filled in by loadComments once Notion answers.
-    html += '<section id="comments" hidden><h2 class="label" id="commentsLabel">Comments</h2>' +
-            '<div id="commentsBody"></div></section>';
 
     if (v.caption){
       html += '<section><h2 class="label">Caption</h2><div class="card"><p>' + esc(v.caption) + '</p></div></section>';
