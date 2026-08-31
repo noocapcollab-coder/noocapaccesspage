@@ -371,22 +371,7 @@
       .then(function(res){
         var d = res.data || {};
 
-        if (res.status === 403 && d.error === 'no_comment_access'){
-          commentsHtml = '<p class="cmt-note">Comments are not readable yet — turn on "Read comments" for the integration in Notion.</p>';
-          paintComments(commentsHtml, 'Comments');
-          return;
-        }
-        if (res.status !== 200 && d.error !== 'no_comment_access'){
-          commentsHtml = '<p class="cmt-note">Comments endpoint returned ' + res.status + ' · ' + esc(String(d.error || d.message || '')) + '</p>';
-          paintComments(commentsHtml, 'Comments');
-          return;
-        }
-        if (!d.threads){
-          commentsHtml = '<p class="cmt-note">Comments endpoint answered without a thread list.</p>';
-          paintComments(commentsHtml, 'Comments');
-          return;
-        }
-        if (!d.threads.length){
+        if (res.status !== 200 || !d.threads || !d.threads.length){
           commentsHtml = '';
           paintComments('', 'Comments');
           return;
@@ -408,9 +393,9 @@
         commentsHtml = out;
         paintComments(out, 'Comments <span class="count">· ' + d.count + '</span>');
       })
-      .catch(function(err){
-        commentsHtml = '<p class="cmt-note">Comments failed to load: ' + esc(String(err && err.message ? err.message : err)) + '</p>';
-        paintComments(commentsHtml, 'Comments');
+      .catch(function(){
+        commentsHtml = '';
+        paintComments('', 'Comments');
       });
   }
 
