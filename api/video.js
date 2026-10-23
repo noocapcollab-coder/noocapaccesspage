@@ -3,6 +3,7 @@
 // Serves one card from a creator REELS board without exposing the rest of the
 // workspace. Nothing here writes back to Notion.
 
+const { snapshotPage } = require('./_snapshot.js');
 const NOTION = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
 
@@ -187,19 +188,23 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const pageRes = await nfetch(`${NOTION}/pages/${id}`, { headers: headers() });
-    if (pageRes.status === 404) {
-      res.status(404).json({ error: 'not_found', message: 'No video matches this link.' });
-      return;
+    // The card's fields come from the shared board snapshot when it has them, so a busy Notion can't block the page
+    let page = fresh ? null : await snapshotPage(id).catch(() => null);
+    if (!page) {
+      const pageRes = await nfetch(`${NOTION}/pages/${id}`, { headers: headers() });
+      if (pageRes.status === 404) {
+        res.status(404).json({ error: 'not_found', message: 'No video matches this link.' });
+        return;
+      }
+      if (!pageRes.ok) {
+        const body = await pageRes.text();
+        if (hit) { res.status(200).json(hit.payload); return; }
+        if (pageRes.status === 429) { res.status(503).json({ error: 'busy', message: 'Notion is busy right now. Retrying in a few seconds.' }); return; }
+        res.status(502).json({ error: 'notion_error', message: tokenHint() + ' || Notion said: ' + body.slice(0, 200) });
+        return;
+      }
+      page = await pageRes.json();
     }
-    if (!pageRes.ok) {
-      const body = await pageRes.text();
-      if (hit) { res.status(200).json(hit.payload); return; }
-      if (pageRes.status === 429) { res.status(503).json({ error: 'busy', message: 'Notion is busy right now. Retrying in a few seconds.' }); return; }
-      res.status(502).json({ error: 'notion_error', message: tokenHint() + ' || Notion said: ' + body.slice(0, 200) });
-      return;
-    }
-    const page = await pageRes.json();
     const props = page.properties || {};
 
     const parent = page.parent || {};
