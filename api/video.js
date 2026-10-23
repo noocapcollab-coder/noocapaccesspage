@@ -6,6 +6,18 @@
 const NOTION = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
 
+// Notion allows only a few requests a second per integration, and every NOOCAP tool shares this token.
+// On "rate limited" or a Notion hiccup, wait what Notion asks and try again instead of failing the page.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function nfetch(url, opts) {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(url, opts);
+    if ((r.status !== 429 && r.status < 500) || attempt >= 4) return r;
+    const ra = parseFloat(r.headers.get('retry-after'));
+    await sleep(Math.min(Number.isFinite(ra) ? ra * 1000 : 700 * Math.pow(2, attempt), 6000) + Math.random() * 300);
+  }
+}
+
 const headers = () => ({
   Authorization: `Bearer ${String(process.env.NOTION_TOKEN || '').trim().replace(/^["']|["']$/g, '')}`,
   'Notion-Version': NOTION_VERSION,
@@ -175,13 +187,15 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const pageRes = await fetch(`${NOTION}/pages/${id}`, { headers: headers() });
+    const pageRes = await nfetch(`${NOTION}/pages/${id}`, { headers: headers() });
     if (pageRes.status === 404) {
       res.status(404).json({ error: 'not_found', message: 'No video matches this link.' });
       return;
     }
     if (!pageRes.ok) {
       const body = await pageRes.text();
+      if (hit) { res.status(200).json(hit.payload); return; }
+      if (pageRes.status === 429) { res.status(503).json({ error: 'busy', message: 'Notion is busy right now. Retrying in a few seconds.' }); return; }
       res.status(502).json({ error: 'notion_error', message: tokenHint() + ' || Notion said: ' + body.slice(0, 200) });
       return;
     }
@@ -194,7 +208,7 @@ module.exports = async (req, res) => {
 
     let body = [];
     try {
-      const blocksRes = await fetch(`${NOTION}/blocks/${id}/children?page_size=100`, { headers: headers() });
+      const blocksRes = await nfetch(`${NOTION}/blocks/${id}/children?page_size=100`, { headers: headers() });
       if (blocksRes.ok) {
         const blocks = await blocksRes.json();
         body = renderBlocks(blocks.results);

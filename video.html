@@ -439,6 +439,12 @@
           state('Video not found', 'This card may have been deleted or moved to another board. Ask in your Discord channel for a fresh link.');
           return;
         }
+        if (data.error === 'busy'){
+          // Notion is rate limiting: keep what's on screen if we already have it, otherwise say so and retry soon
+          if (!window.__vbLoaded) state('Loading…', 'Notion is busy right now. Trying again in a few seconds.');
+          setTimeout(load, 8000);
+          return;
+        }
         if (!res.ok){
           state('Cannot load this video',
                 (data.error === 'notion_error' ? 'Notion rejected the request. Usually the NOTION_TOKEN belongs to a different integration than the one connected to the boards.' :
@@ -447,7 +453,7 @@
                 '<br><br><code style="color:#8492a4;font-size:12.5px">' + esc(String(data.message || data.error || '')).slice(0,200) + '</code>');
           return;
         }
-        render(data);
+        render(data); window.__vbLoaded = true;
         stamp();
       })
       .catch(function(err){

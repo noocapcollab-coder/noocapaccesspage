@@ -15,8 +15,20 @@ function idOf(raw) {
   return hex.length === 32 ? hex : '';
 }
 
+// Notion allows only a few requests a second per integration, and every NOOCAP tool shares this token.
+// On "rate limited" or a Notion hiccup, wait what Notion asks and try again instead of failing the page.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function nfetch(url, opts) {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(url, opts);
+    if ((r.status !== 429 && r.status < 500) || attempt >= 4) return r;
+    const ra = parseFloat(r.headers.get('retry-after'));
+    await sleep(Math.min(Number.isFinite(ra) ? ra * 1000 : 700 * Math.pow(2, attempt), 6000) + Math.random() * 300);
+  }
+}
+
 async function notion(path, token) {
-  const r = await fetch(NOTION + path, {
+  const r = await nfetch(NOTION + path, {
     headers: {
       'Authorization': 'Bearer ' + token,
       'Notion-Version': VERSION
@@ -81,6 +93,7 @@ module.exports = async function handler(req, res) {
       if (!r.ok) {
         if (r.status === 403) return res.status(403).json({ error: 'no_comment_access' });
         if (r.status === 404) return res.status(404).json({ error: 'not_found' });
+        if (hit) return res.status(200).json(hit.payload);
         return res.status(502).json({
           error: 'notion_error',
           message: (r.json && r.json.message) || r.text.slice(0, 200)
