@@ -164,6 +164,16 @@
   .tbtn[disabled]{opacity:.5;cursor:wait}
   .track-times{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0 0;color:var(--dim);font-size:12.5px;font-variant-numeric:tabular-nums}
   .track-err{color:var(--warn);font-size:13px;margin:10px 0 0}
+  .handoff{display:grid;gap:12px;grid-template-columns:1fr 1fr;margin:4px 0 14px}
+  .handoff label{display:flex;flex-direction:column;gap:5px;font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.1em;font-size:11.5px;color:var(--dim)}
+  .handoff label.wide{grid-column:1 / -1}
+  .handoff input,.handoff select{
+    font:inherit;font-size:14.5px;color:var(--text);background:var(--panel-2);border:1px solid var(--line);
+    border-radius:9px;padding:10px 12px;text-transform:none;letter-spacing:0;font-family:'Inter',sans-serif;
+  }
+  .handoff input:focus,.handoff select:focus{outline:2px solid var(--steel);outline-offset:1px;border-color:var(--steel)}
+  .handoff-note{color:var(--dim);font-size:12.5px;margin:0 0 12px}
+  @media (max-width:560px){ .handoff{grid-template-columns:1fr} }
 
   /* ---- meta grid ---- */
   .meta{display:grid;gap:1px;grid-template-columns:1fr 1fr;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
@@ -371,7 +381,7 @@
       html += '<section><h2 class="label">Notes</h2><div class="card"><p>' + esc(v.notes) + '</p></div></section>';
     }
 
-    html += '<p class="foot">The brief is read-only. The buttons above only log your edit times. Anything else that needs changing goes through your channel in Discord.</p>';
+    html += '<p class="foot">The brief is read-only. The buttons above log your edit times and send the finished video for review. Anything else that needs changing goes through your channel in Discord.</p>';
 
     document.getElementById('root').innerHTML = html;
     document.title = v.title + ' · NOOCAP';
@@ -386,6 +396,49 @@
 
   // ---------- edit tracking ----------
   var video = null, track = null, trackLoaded = false, trackBusy = false, trackErr = '';
+  var handoffOpen = false, draft = null;
+  var DEFAULT_CREATORS = ['Duncan','Brad','Lindsay','Chris','EmTech','Valerie','David','NICOLE'];
+  var DEFAULT_EDITORS  = ['Parvez','Sumith','Utsav','Vicky','Prabal','Abhishek','PRATEEK'];
+
+  function matchOpt(v, list){
+    v = String(v || '').trim().toLowerCase();
+    if (v === 'valeri') v = 'valerie';
+    for (var i=0;i<list.length;i++) if (list[i].toLowerCase() === v) return list[i];
+    return '';
+  }
+
+  // Prefills the hand-off from the brief so the editor normally only pastes the Frame.io link.
+  function newDraft(){
+    var opts = (track && track.options) || {};
+    var fmt = String(video.format || '').toUpperCase();
+    var typ = String(video.type || '').toUpperCase();
+    return {
+      frameio: '',
+      creator: matchOpt(video.creator, opts.creators || DEFAULT_CREATORS),
+      editor: matchOpt(video.editor || (function(){ try { return localStorage.getItem('noocap_editor'); } catch(e){ return ''; } })(), opts.editors || DEFAULT_EDITORS),
+      contentType: /LONG/.test(fmt) ? 'LONG-FORM' : (/SHORT/.test(fmt) ? 'SHORT-FORM' : ''),
+      type: /SPONSOR/.test(typ) ? 'SPONSOR' : (/PERSONAL/.test(typ) ? 'PERSONAL' : '')
+    };
+  }
+
+  function selectHtml(field, label, list, value){
+    var o = '<option value="">Choose…</option>' + list.map(function(x){
+      return '<option' + (x === value ? ' selected' : '') + '>' + esc(x) + '</option>';
+    }).join('');
+    return '<label>' + label + '<select data-f="' + field + '">' + o + '</select></label>';
+  }
+
+  function handoffHtml(){
+    var opts = (track && track.options) || {};
+    return '<p class="handoff-note">This sends it to the team for review, same as the handoff form. Check the details and paste the Frame.io link.</p>' +
+      '<div class="handoff">' +
+        '<label class="wide">Frame.io link<input data-f="frameio" type="url" inputmode="url" placeholder="https://f.io/…" value="' + esc(draft.frameio) + '"></label>' +
+        selectHtml('creator','Creator', opts.creators || DEFAULT_CREATORS, draft.creator) +
+        selectHtml('editor','Your name', opts.editors || DEFAULT_EDITORS, draft.editor) +
+        selectHtml('contentType','Format', ['SHORT-FORM','LONG-FORM'], draft.contentType) +
+        selectHtml('type','Type', ['PERSONAL','SPONSOR'], draft.type) +
+      '</div>';
+  }
 
   function hhmm(iso){
     if (!iso) return '';
@@ -425,8 +478,13 @@
       dot = 'run'; line = '<b>Claude is editing</b> since ' + hhmm(t.startedAt) + '. Press when the render is done.';
       btns = btn('claude_done','Claude render done',true);
     } else if (stage === 'Editor review' || stage === 'Manual editing'){
-      dot = 'review'; line = '<b>' + (stage === 'Manual editing' ? 'Manual edit in progress.' : 'You are reviewing and fixing.') + '</b> Press when it is final.';
-      btns = btn('send_review','Sent for review',true);
+      dot = 'review'; line = '<b>' + (stage === 'Manual editing' ? 'Manual edit in progress.' : 'You are reviewing and fixing.') + '</b> Press when it is final and uploaded to Frame.io.';
+      if (handoffOpen){
+        line = '<b>Send for review</b>';
+        btns = btn('send_review_confirm','Send for review',true) + btn('handoff_cancel','Cancel',false);
+      } else {
+        btns = btn('send_review', t.intakeId ? 'Sent revision for review' : 'Send for review', true);
+      }
     } else if (stage === 'Ready for Harsh'){
       dot = 'sent'; line = '<b>Sent for review</b> at ' + hhmm(t.sentAt) + '. Nothing else to do unless changes come back.';
     } else if (stage === 'Delivered'){
@@ -441,8 +499,10 @@
     if (t.sentAt) times += '<span>Total ' + mins(t.startedAt, t.sentAt) + '</span>';
     if (t.revisions) times += '<span>Revisions ' + t.revisions + '</span>';
 
+    var form = (handoffOpen && (stage === 'Editor review' || stage === 'Manual editing')) ? handoffHtml() : '';
+
     el.innerHTML =
-      '<p class="track-status">' + (dot ? '<span class="dot ' + dot + '"></span>' : '<span class="dot"></span>') + '<span>' + line + '</span></p>' +
+      '<p class="track-status">' + (dot ? '<span class="dot ' + dot + '"></span>' : '<span class="dot"></span>') + '<span>' + line + '</span></p>' + form +
       (btns ? '<div class="track-btns">' + btns + '</div>' : '') +
       (times ? '<div class="track-times">' + times + '</div>' : '') +
       (trackErr ? '<p class="track-err">' + esc(trackErr) + '</p>' : '');
@@ -474,16 +534,33 @@
 
   function sendTrack(action){
     if (trackBusy || !video) return;
+    if (action === 'handoff_cancel'){ handoffOpen = false; trackErr = ''; paintTrack(); return; }
+    // First hand-off opens the details panel; a revision round reuses the existing review ticket and sends straight away.
+    if (action === 'send_review' && !(track && track.intakeId)){
+      handoffOpen = true; draft = draft || newDraft(); trackErr = ''; paintTrack();
+      var f = document.querySelector('[data-f="frameio"]'); if (f) f.focus();
+      return;
+    }
+    var payload = { id:id, action:action, title:video.title, creator:video.creator };
+    if (action === 'send_review_confirm'){
+      if (!/^https?:\/\/\S+$/i.test(draft.frameio)){ trackErr = 'Paste the Frame.io link first.'; paintTrack(); return; }
+      payload.action = 'send_review';
+      payload.handoff = draft;
+      payload.editor = draft.editor || editorName();
+      try { if (draft.editor) localStorage.setItem('noocap_editor', draft.editor); } catch(e){}
+    } else {
+      payload.editor = editorName();
+    }
     trackBusy = true; trackErr = ''; paintTrack();
     fetch('/api/track', {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ id:id, action:action, title:video.title, creator:video.creator, editor:editorName() })
+      body: JSON.stringify(payload)
     })
       .then(function(r){ return r.json().then(function(j){ return { ok:r.ok, data:j }; }); })
       .then(function(res){
         trackBusy = false;
-        if (res.ok){ track = res.data; }
+        if (res.ok){ track = res.data; if (payload.action === 'send_review'){ handoffOpen = false; draft = null; } }
         else trackErr = (res.data && res.data.message) || 'That did not save. Try again.';
         paintTrack();
       })
@@ -494,6 +571,13 @@
     var b = e.target.closest && e.target.closest('[data-act]');
     if (b) sendTrack(b.getAttribute('data-act'));
   });
+  function keepDraft(e){
+    var f = e.target && e.target.getAttribute && e.target.getAttribute('data-f');
+    if (f && draft) draft[f] = e.target.value;
+    if (f && trackErr){ trackErr = ''; var er = document.querySelector('.track-err'); if (er) er.remove(); }
+  }
+  document.addEventListener('input', keepDraft);
+  document.addEventListener('change', keepDraft);
 
   function paintComments(inner, label){
     var sec  = document.getElementById('comments');
@@ -556,6 +640,7 @@
   var id = new URLSearchParams(location.search).get('id');
 
   function load(){
+    if (handoffOpen && window.__vbLoaded) return;  // don't wipe the hand-off panel while the editor is filling it in
     if (!id){
       state('No video in this link', 'The link needs a video ID on the end. Ask in your Discord channel for a fresh one.');
       return;
