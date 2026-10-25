@@ -143,6 +143,28 @@
   #comments.pinned .thread{border-color:#3a2a1c;background:linear-gradient(180deg,#161b25,#111823)}
   #comments.pinned .label{color:var(--personal)}
 
+  /* ---- edit tracking ---- */
+  .track{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+  .track-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;color:var(--muted);font-size:14px}
+  .track-status b{color:var(--text);font-weight:600}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:none}
+  .dot.run{background:var(--steel)}
+  .dot.review{background:var(--personal)}
+  .dot.sent{background:var(--ok)}
+  .dot.redo{background:var(--sponsor)}
+  .track-btns{display:flex;gap:10px;flex-wrap:wrap}
+  .tbtn{
+    font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.09em;font-size:14px;
+    padding:11px 18px;border-radius:10px;border:1px solid #2b3a4d;background:#141d29;color:var(--text);cursor:pointer;
+    transition:border-color .15s ease,background .15s ease;
+  }
+  .tbtn:hover{border-color:var(--steel)}
+  .tbtn:focus-visible{outline:2px solid var(--steel);outline-offset:2px}
+  .tbtn.primary{background:var(--steel);border-color:var(--steel);color:#0b1017}
+  .tbtn[disabled]{opacity:.5;cursor:wait}
+  .track-times{display:flex;gap:18px;flex-wrap:wrap;margin:12px 0 0;color:var(--dim);font-size:12.5px;font-variant-numeric:tabular-nums}
+  .track-err{color:var(--warn);font-size:13px;margin:10px 0 0}
+
   /* ---- meta grid ---- */
   .meta{display:grid;gap:1px;grid-template-columns:1fr 1fr;background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
   .cell{background:var(--panel);padding:13px 16px}
@@ -326,6 +348,9 @@
             (v.postDate ? ' Goes out ' + esc(niceDate(v.postDate)) + '.' : '') + '</p>';
     html += '</div>';
 
+    // Edit tracking: the editor's buttons, painted by paintTrack() so refreshes keep the latest state.
+    html += '<section><h2 class="label">Your edit</h2><div class="track" id="track"></div></section>';
+
     // Comments sit first, above the files, so a note for the editor is the first thing read.
     html += '<section id="comments" class="pinned" hidden><h2 class="label" id="commentsLabel">Comments</h2>' +
             '<div id="commentsBody"></div></section>';
@@ -346,14 +371,129 @@
       html += '<section><h2 class="label">Notes</h2><div class="card"><p>' + esc(v.notes) + '</p></div></section>';
     }
 
-    html += '<p class="foot">Read-only view of the production card. Anything that needs changing goes through your channel in Discord.</p>';
+    html += '<p class="foot">The brief is read-only. The buttons above only log your edit times. Anything else that needs changing goes through your channel in Discord.</p>';
 
     document.getElementById('root').innerHTML = html;
     document.title = v.title + ' · NOOCAP';
 
     if (commentsHtml) paintComments(commentsHtml, null);  // repaint what we already had
     loadComments();
+
+    video = v;
+    paintTrack();
+    if (!trackBusy) loadTrack();
   }
+
+  // ---------- edit tracking ----------
+  var video = null, track = null, trackLoaded = false, trackBusy = false, trackErr = '';
+
+  function hhmm(iso){
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d)) return '';
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+
+  function mins(a, b){
+    if (!a || !b) return '';
+    var m = Math.round((new Date(b) - new Date(a)) / 60000);
+    if (isNaN(m) || m < 0) return '';
+    return m < 60 ? m + ' min' : Math.floor(m/60) + 'h ' + (m%60) + 'm';
+  }
+
+  function btn(action, label, primary){
+    return '<button class="tbtn' + (primary ? ' primary' : '') + '" data-act="' + action + '"' +
+           (trackBusy ? ' disabled' : '') + '>' + label + '</button>';
+  }
+
+  function paintTrack(){
+    var el = document.getElementById('track');
+    if (!el) return;
+    if (!trackLoaded){ el.innerHTML = '<div class="skeleton" style="width:60%"></div>'; return; }
+
+    var t = track || { tracked:false };
+    var stage = t.stage || '';
+    var dot = '', line = '', btns = '';
+
+    if (!t.tracked){
+      line = 'Not started yet. Press the button the moment you paste the prompt into Claude.';
+      btns = btn('start_claude','Started in Claude',true) + btn('start_manual','Start manual edit',false);
+    } else if (stage === 'Revision'){
+      dot = 'redo'; line = '<b>Changes requested.</b> Start again when you begin the revision.';
+      btns = btn('start_claude','Started revision in Claude',true) + btn('start_manual','Start manual revision',false);
+    } else if (stage === 'Claude running'){
+      dot = 'run'; line = '<b>Claude is editing</b> since ' + hhmm(t.startedAt) + '. Press when the render is done.';
+      btns = btn('claude_done','Claude render done',true);
+    } else if (stage === 'Editor review' || stage === 'Manual editing'){
+      dot = 'review'; line = '<b>' + (stage === 'Manual editing' ? 'Manual edit in progress.' : 'You are reviewing and fixing.') + '</b> Press when it is final.';
+      btns = btn('send_review','Sent for review',true);
+    } else if (stage === 'Ready for Harsh'){
+      dot = 'sent'; line = '<b>Sent for review</b> at ' + hhmm(t.sentAt) + '. Nothing else to do unless changes come back.';
+    } else if (stage === 'Delivered'){
+      dot = 'sent'; line = '<b>Delivered.</b> Nice work.';
+    } else {
+      line = 'Stage: ' + esc(stage);
+    }
+
+    var times = '';
+    if (t.startedAt) times += '<span>Started ' + hhmm(t.startedAt) + '</span>';
+    if (t.claudeDoneAt) times += '<span>Claude took ' + mins(t.startedAt, t.claudeDoneAt) + '</span>';
+    if (t.sentAt) times += '<span>Total ' + mins(t.startedAt, t.sentAt) + '</span>';
+    if (t.revisions) times += '<span>Revisions ' + t.revisions + '</span>';
+
+    el.innerHTML =
+      '<p class="track-status">' + (dot ? '<span class="dot ' + dot + '"></span>' : '<span class="dot"></span>') + '<span>' + line + '</span></p>' +
+      (btns ? '<div class="track-btns">' + btns + '</div>' : '') +
+      (times ? '<div class="track-times">' + times + '</div>' : '') +
+      (trackErr ? '<p class="track-err">' + esc(trackErr) + '</p>' : '');
+  }
+
+  function loadTrack(){
+    if (!id) return;
+    fetch('/api/track?id=' + encodeURIComponent(id))
+      .then(function(r){ return r.json().then(function(j){ return { ok:r.ok, data:j }; }); })
+      .then(function(res){
+        trackLoaded = true;
+        if (res.ok){ track = res.data; trackErr = ''; }
+        else trackErr = (res.data && res.data.message) || 'Tracking is unavailable right now.';
+        paintTrack();
+      })
+      .catch(function(){ trackLoaded = true; trackErr = 'Tracking is unavailable right now.'; paintTrack(); });
+  }
+
+  function editorName(){
+    if (video && video.editor) return video.editor;
+    var n = '';
+    try { n = localStorage.getItem('noocap_editor') || ''; } catch(e){}
+    if (!n){
+      n = (window.prompt('Your name, so this edit is logged to you:') || '').trim();
+      try { if (n) localStorage.setItem('noocap_editor', n); } catch(e){}
+    }
+    return n;
+  }
+
+  function sendTrack(action){
+    if (trackBusy || !video) return;
+    trackBusy = true; trackErr = ''; paintTrack();
+    fetch('/api/track', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ id:id, action:action, title:video.title, creator:video.creator, editor:editorName() })
+    })
+      .then(function(r){ return r.json().then(function(j){ return { ok:r.ok, data:j }; }); })
+      .then(function(res){
+        trackBusy = false;
+        if (res.ok){ track = res.data; }
+        else trackErr = (res.data && res.data.message) || 'That did not save. Try again.';
+        paintTrack();
+      })
+      .catch(function(){ trackBusy = false; trackErr = 'That did not save. Check your connection and try again.'; paintTrack(); });
+  }
+
+  document.addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('[data-act]');
+    if (b) sendTrack(b.getAttribute('data-act'));
+  });
 
   function paintComments(inner, label){
     var sec  = document.getElementById('comments');
