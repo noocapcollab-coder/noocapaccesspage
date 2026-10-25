@@ -468,7 +468,7 @@
     var stage = t.status || '';
     var dot = '', line = '', btns = '';
 
-    if (!t.tracked){
+    if (!t.tracked || stage === 'Assigned'){
       line = 'Not started yet. Press the button the moment you paste the prompt into Claude.';
       btns = btn('start_claude','Started in Claude',true) + btn('start_manual','Start manual edit',false);
     } else if (stage === 'Changes'){
