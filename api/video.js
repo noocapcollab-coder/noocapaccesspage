@@ -168,6 +168,26 @@ function tokenHint() {
   return 'NOTION_TOKEN ' + bits.join(', ');
 }
 
+// Boards missing from the list above are named after their creator ("DASH - CHRIS", "NICOLE REELS"), so read the
+// board's title once and match a known creator name in it.
+const KNOWN_CREATORS = ['Brad', 'Chris', 'Lindsay', 'EmTech', 'Duncan', 'Valeri', 'Dmytro', 'Jonathan', 'Cindy', 'Joshua', 'David', 'Nicole'];
+const boardNames = new Map(); // database id -> creator ('' when none matched)
+async function creatorFromBoardName(parent) {
+  const dbId = bare(parent.database_id || '');
+  if (dbId.length !== 32) return '';
+  if (boardNames.has(dbId)) return boardNames.get(dbId);
+  const r = await nfetch(`${NOTION}/databases/${dashed(dbId)}`, { headers: headers() });
+  let name = '';
+  if (r.ok) {
+    const db = await r.json();
+    const title = richText(db.title).toLowerCase();
+    name = KNOWN_CREATORS.find((c) => new RegExp('\\b' + c.toLowerCase()).test(title)) || '';
+    if (!name && /valer/.test(title)) name = 'Valeri';
+  }
+  boardNames.set(dbId, name);
+  return name;
+}
+
 const cache = new Map(); // id -> { at, payload }
 const TTL = 20000;
 
@@ -209,7 +229,7 @@ module.exports = async (req, res) => {
 
     const parent = page.parent || {};
     const parentId = bare(parent.data_source_id || parent.database_id || '');
-    const creator = CREATOR_BY_ID[parentId] || '';
+    const creator = CREATOR_BY_ID[parentId] || (await creatorFromBoardName(parent).catch(() => ''));
 
     let body = [];
     try {

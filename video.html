@@ -397,7 +397,7 @@
   // ---------- edit tracking ----------
   var video = null, track = null, trackLoaded = false, trackBusy = false, trackErr = '';
   var handoffOpen = false, draft = null;
-  var DEFAULT_CREATORS = ['Duncan','Brad','Lindsay','Chris','EmTech','Valerie','David','NICOLE'];
+  var DEFAULT_CREATORS = ['Duncan','Brad','Lindsay','Chris','EmTech','Valerie','David','Nicole','Dmytro','Jonathan','Cindy','Joshua'];
   var DEFAULT_EDITORS  = ['Parvez','Sumith','Utsav','Vicky','Prabal','Abhishek','PRATEEK'];
 
   function matchOpt(v, list){
@@ -430,7 +430,7 @@
 
   function handoffHtml(){
     var opts = (track && track.options) || {};
-    return '<p class="handoff-note">This sends it to the team for review, same as the handoff form. Check the details and paste the Frame.io link.</p>' +
+    return '<p class="handoff-note">This sends it to the team for review. Check the details and paste the Frame.io link.</p>' +
       '<div class="handoff">' +
         '<label class="wide">Frame.io link<input data-f="frameio" type="url" inputmode="url" placeholder="https://f.io/…" value="' + esc(draft.frameio) + '"></label>' +
         selectHtml('creator','Creator', opts.creators || DEFAULT_CREATORS, draft.creator) +
@@ -465,13 +465,13 @@
     if (!trackLoaded){ el.innerHTML = '<div class="skeleton" style="width:60%"></div>'; return; }
 
     var t = track || { tracked:false };
-    var stage = t.stage || '';
+    var stage = t.status || '';
     var dot = '', line = '', btns = '';
 
     if (!t.tracked){
       line = 'Not started yet. Press the button the moment you paste the prompt into Claude.';
       btns = btn('start_claude','Started in Claude',true) + btn('start_manual','Start manual edit',false);
-    } else if (stage === 'Revision'){
+    } else if (stage === 'Changes'){
       dot = 'redo'; line = '<b>Changes requested.</b> Start again when you begin the revision.';
       btns = btn('start_claude','Started revision in Claude',true) + btn('start_manual','Start manual revision',false);
     } else if (stage === 'Claude running'){
@@ -483,12 +483,12 @@
         line = '<b>Send for review</b>';
         btns = btn('send_review_confirm','Send for review',true) + btn('handoff_cancel','Cancel',false);
       } else {
-        btns = btn('send_review', t.intakeId ? 'Sent revision for review' : 'Send for review', true);
+        btns = btn('send_review', t.draftSubmittedAt ? 'Send revision for review' : 'Send for review', true);
       }
-    } else if (stage === 'Ready for Harsh'){
+    } else if (stage === 'In Review'){
       dot = 'sent'; line = '<b>Sent for review</b> at ' + hhmm(t.sentAt) + '. Nothing else to do unless changes come back.';
-    } else if (stage === 'Delivered'){
-      dot = 'sent'; line = '<b>Delivered.</b> Nice work.';
+    } else if (stage === 'To Post' || stage === 'Posted'){
+      dot = 'sent'; line = '<b>Approved.</b> Nice work.';
     } else {
       line = 'Stage: ' + esc(stage);
     }
@@ -536,7 +536,7 @@
     if (trackBusy || !video) return;
     if (action === 'handoff_cancel'){ handoffOpen = false; trackErr = ''; paintTrack(); return; }
     // First hand-off opens the details panel; a revision round reuses the existing review ticket and sends straight away.
-    if (action === 'send_review' && !(track && track.intakeId)){
+    if (action === 'send_review' && !(track && track.draftSubmittedAt)){
       handoffOpen = true; draft = draft || newDraft(); trackErr = ''; paintTrack();
       var f = document.querySelector('[data-f="frameio"]'); if (f) f.focus();
       return;
