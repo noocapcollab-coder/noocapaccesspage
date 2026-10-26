@@ -24,6 +24,7 @@ const EDITORS = ['Parvez', 'Sumith', 'Utsav', 'Vicky', 'Prabal', 'Abhishek', 'PR
 const CONTENT_TYPES = ['SHORT-FORM', 'LONG-FORM'];
 const TYPES = ['PERSONAL', 'SPONSOR'];
 const ACTIONS = ['start_claude', 'start_manual', 'claude_done', 'send_review'];
+const NOTE_HOOK = process.env.EDIT_NOTE_WEBHOOK || 'https://n8n-production-cd10f.up.railway.app/webhook/noocap-edit-note';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function nfetch(url, opts) {
@@ -227,6 +228,15 @@ module.exports = async (req, res) => {
       if (!r.ok) throw await notionError(r);
       saved = await r.json();
     }
+
+    // Tell the video's Discord thread (started, render done, sent for review). n8n builds the line from the row
+    // itself; a slow or failed note never blocks the editor's button.
+    await fetch(NOTE_HOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: saved.id, action }),
+      signal: AbortSignal.timeout(4000),
+    }).catch(() => {});
 
     res.status(200).json(reply(saved));
   } catch (err) {
