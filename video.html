@@ -511,6 +511,8 @@
       }
     } else if (stage === 'In Review'){
       dot = 'sent'; line = '<b>Sent for review</b> at ' + hhmm(t.sentAt) + '. Nothing else to do unless changes come back.';
+    } else if (stage === 'Send to Brand' || stage === 'With Brand'){
+      dot = 'sent'; line = '<b>' + (stage === 'With Brand' ? 'With the brand' : 'Going to the brand now') + '.</b> Nothing to do unless they send changes back.';
     } else if (stage === 'To Post' || stage === 'Posted'){
       dot = 'sent'; line = '<b>Approved.</b> Nice work.';
     } else {
