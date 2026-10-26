@@ -86,6 +86,15 @@
   .step.past{color:var(--muted)}
   .step.now{color:#0b1017;background:var(--steel);font-weight:700}
   .rail-note{color:var(--dim);font-size:12.5px;margin:0 0 4px}
+  .golive{display:flex;align-items:center;gap:12px;margin:18px 0 0;padding:12px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel)}
+  .golive .gl-k{font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.12em;font-size:12px;color:var(--dim)}
+  .golive .gl-v{font-weight:600;font-size:15.5px}
+  .golive .gl-rel{margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.1em;font-size:13px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .golive.soon{border-color:#5a3a1c;background:#1d150c}
+  .golive.soon .gl-rel{color:#0b1017;background:var(--warn);border-color:var(--warn)}
+  .golive.later .gl-rel{color:var(--steel);border-color:#24415c}
+  .golive.past .gl-rel{color:var(--dim)}
+  .golive.unset .gl-v{color:var(--dim);font-weight:400}
 
   /* ---- sections ---- */
   section{margin-top:30px}
@@ -256,6 +265,18 @@
     return m ? m[0] : '';
   }
 
+  // Go-live date relative to today in IST: TODAY / TOMORROW / IN 3 DAYS / 2 DAYS AGO
+  function goLive(iso){
+    if (!iso) return { cls:'unset', date:'Not set yet', rel:'Ask in your channel' };
+    var day = String(iso).slice(0,10);
+    var today = new Date(Date.now() + 5.5*3600*1000).toISOString().slice(0,10);
+    var diff = Math.round((Date.parse(day) - Date.parse(today)) / 86400000);
+    var date = new Date(day + 'T00:00:00Z').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'short', timeZone:'UTC' });
+    var rel = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : diff > 1 ? 'In ' + diff + ' days' : (-diff) + (diff === -1 ? ' day ago' : ' days ago');
+    var cls = diff < 0 ? 'past' : diff <= 1 ? 'soon' : 'later';
+    return { cls:cls, date:date, rel:rel };
+  }
+
   function niceDate(iso){
     if (!iso) return '';
     var d = new Date(iso);
@@ -355,7 +376,10 @@
     html += '<h1>' + esc(v.title) + '</h1>';
     html += '<div class="rail">' + rail + '</div>';
     html += '<p class="rail-note">' + (v.editor ? esc(v.editor) + ' is on this one.' : 'No editor assigned yet.') +
-            (v.postDate ? ' Goes out ' + esc(niceDate(v.postDate)) + '.' : '') + '</p>';
+            '</p>';
+    var gl = goLive(v.postDate);
+    html += '<div class="golive ' + gl.cls + '"><span class="gl-k">📅 Goes live</span>' +
+            '<span class="gl-v">' + esc(gl.date) + '</span><span class="gl-rel">' + esc(gl.rel) + '</span></div>';
     html += '</div>';
 
     // Edit tracking: the editor's buttons, painted by paintTrack() so refreshes keep the latest state.
