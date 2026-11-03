@@ -100,6 +100,12 @@ function plain(p) {
 }
 
 // Case-insensitive property lookup across a list of possible column names.
+// Each creator board names its columns a little differently (REF, Ref Video, Edited Vid...): match by pattern as a fallback
+function pickLike(props, re) {
+  for (const k of Object.keys(props || {})) if (re.test(k.trim())) { const v = plain(props[k]); if (v) return v; }
+  return '';
+}
+
 function pick(props, names) {
   const keys = Object.keys(props || {});
   for (const name of names) {
@@ -322,8 +328,8 @@ module.exports = async (req, res) => {
       notes: pick(props, ['Notes']),
       rawFootage: pick(props, ['Raw Footage', 'Footage']),
       asset: pick(props, ['Asset']),
-      refVideo: pick(props, ['Ref Video', 'Reference', 'Reference Video']),
-      editedVideo: pick(props, ['Edited Video', 'Final Video']),
+      refVideo: pick(props, ['Ref Video', 'REF', 'Ref', 'Reference', 'Reference Video', 'Ref Link', 'Reference Link']) || pickLike(props, /^ref(erence)?\b/i),
+      editedVideo: pick(props, ['Edited Video', 'Edited Vid', 'Final Video']) || pickLike(props, /^(edited|final) vid/i),
       lastEdited: page.last_edited_time || '',
       body,
       script,
