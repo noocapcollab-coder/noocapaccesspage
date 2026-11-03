@@ -393,6 +393,11 @@
       html += '<section><h2 class="label">Files</h2><div class="links">' + links + '</div></section>';
     }
 
+    // The script from the card's "Script" page (the approved / newest version), shown on its own
+    if (v.script && v.script.blocks && v.script.blocks.length){
+      html += '<section><h2 class="label">Script' + (v.script.version ? ' · ' + esc(v.script.version.split('\n')[0]) : '') + '</h2><div class="card">' + bodyHtml(v.script.blocks) + '</div></section>';
+    }
+
     if (brief){
       html += '<section><h2 class="label">Brief</h2><div class="card">' + brief + '</div></section>';
     }

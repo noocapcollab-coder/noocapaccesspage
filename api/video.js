@@ -138,6 +138,7 @@ function renderBlocks(results) {
     else if (t === 'to_do') out.push({ kind: 'todo', text, done: !!node.checked });
     else if (t === 'quote' && text) out.push({ kind: 'quote', text });
     else if (t === 'callout' && text) out.push({ kind: 'quote', text });
+    else if (t === 'toggle' && text) out.push({ kind: 'h', text });
     else if (t === 'code') out.push({ kind: 'code', text: richText(node.rich_text) });
     else if (t === 'divider') out.push({ kind: 'hr', text: '' });
     else if (t === 'image') {
@@ -151,6 +152,66 @@ function renderBlocks(results) {
     }
   }
   return out;
+}
+
+// The script often lives in a sub-page of the card ("Script"), with the newest version on top (V3, then a V2 heading,
+// then V1 in a toggle). Editors must see the approved one: a version marked approved/final if there is one, otherwise
+// the highest version number, otherwise the whole page.
+const VERSION_RE = /^\s*v(\d+)\b/i;
+function blockText(b) { const n = b[b.type] || {}; return b.type === 'child_page' ? (n.title || '') : richText(n.rich_text); }
+function pickApprovedVersion(blocks) {
+  const segs = [];
+  let cur = { v: null, label: '', blocks: [] };
+  for (const b of blocks || []) {
+    const text = blockText(b);
+    const m = /^(heading_[123]|paragraph|toggle|callout)$/.test(b.type) ? text.match(VERSION_RE) : null;
+    if (m) { segs.push(cur); cur = { v: Number(m[1]), label: text.split('\n')[0].trim(), blocks: [b] }; }
+    else cur.blocks.push(b);
+  }
+  segs.push(cur);
+  const versions = segs.filter((x) => x.v != null);
+  if (!versions.length) return { label: '', blocks: blocks || [] };
+  const chosen = versions.find((x) => /approved|final|locked/i.test(x.label)) || versions.reduce((a, b) => (b.v > a.v ? b : a));
+  return { label: chosen.label, blocks: chosen.blocks };
+}
+async function pageBlocks(id, max = 300) {
+  const all = [];
+  let cursor = '';
+  while (all.length < max) {
+    const r = await nfetch(`${NOTION}/blocks/${id}/children?page_size=100${cursor ? '&start_cursor=' + cursor : ''}`, { headers: headers() });
+    if (!r.ok) break;
+    const j = await r.json();
+    all.push(...(j.results || []));
+    if (!j.has_more || !j.next_cursor) break;
+    cursor = j.next_cursor;
+  }
+  return all;
+}
+// A toggle's own text is shown; open its inside too when it is the chosen version (V1 kept in a toggle)
+async function withToggleKids(blocks) {
+  const out = [];
+  for (const b of blocks) {
+    out.push(b);
+    if (b.type === 'toggle' && b.has_children) out.push(...(await pageBlocks(b.id, 100).catch(() => [])));
+  }
+  return out;
+}
+async function scriptFrom(topBlocks) {
+  const refs = (topBlocks || []).filter((b) => (b.type === 'child_page' && /script/i.test(b.child_page?.title || '')) || (b.type === 'link_to_page' && b.link_to_page?.page_id));
+  for (const ref of refs.slice(0, 3)) {
+    const pid = ref.type === 'child_page' ? ref.id : ref.link_to_page.page_id;
+    if (ref.type === 'link_to_page') {
+      const pr = await nfetch(`${NOTION}/pages/${pid}`, { headers: headers() });
+      if (!pr.ok) continue;
+      const pg = await pr.json();
+      const t = Object.values(pg.properties || {}).find((x) => x.type === 'title');
+      if (!/script/i.test(richText(t && t.title))) continue;
+    }
+    const chosen = pickApprovedVersion(await pageBlocks(pid));
+    const rendered = renderBlocks(await withToggleKids(chosen.blocks));
+    if (rendered.length) return { version: chosen.label.replace(/[:：]\s*$/, ''), blocks: rendered };
+  }
+  return null;
 }
 
 // Describes the token without revealing it, so a 401 can be diagnosed from the page.
@@ -232,12 +293,11 @@ module.exports = async (req, res) => {
     const creator = CREATOR_BY_ID[parentId] || (await creatorFromBoardName(parent).catch(() => ''));
 
     let body = [];
+    let script = null;
     try {
-      const blocksRes = await nfetch(`${NOTION}/blocks/${id}/children?page_size=100`, { headers: headers() });
-      if (blocksRes.ok) {
-        const blocks = await blocksRes.json();
-        body = renderBlocks(blocks.results);
-      }
+      const top = await pageBlocks(id);
+      body = renderBlocks(top);
+      script = await scriptFrom(top).catch(() => null);
     } catch (e) {
       body = [];
     }
@@ -266,6 +326,7 @@ module.exports = async (req, res) => {
       editedVideo: pick(props, ['Edited Video', 'Final Video']),
       lastEdited: page.last_edited_time || '',
       body,
+      script,
     };
 
     cache.set(id, { at: Date.now(), payload });
