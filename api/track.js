@@ -19,7 +19,7 @@ const NOTION_VERSION = '2022-06-28';
 const TRACKER_DB = String(process.env.TRACKER_DB_ID || 'f18ddd9a6f874b62b2f50e768316fee1').replace(/-/g, '');
 
 // EDIT TRACKER's dropdown values. Creator and Editor match the old Video Intake form so n8n reads the same names.
-const CREATORS = ['Duncan', 'Brad', 'Lindsay', 'Chris', 'EmTech', 'Valerie', 'David', 'Nicole', 'Dmytro', 'Jonathan', 'Cindy', 'Joshua'];
+const CREATORS = ['Duncan', 'Brad', 'Lindsay', 'Chris', 'EmTech', 'Valerie', 'David', 'Nicole', 'Dmytro', 'Jonathan', 'Cindy', 'Joshua', 'Harsh'];
 const EDITORS = ['Parvez', 'Sumith', 'Utsav', 'Vicky', 'Prabal', 'Abhishek', 'PRATEEK'];
 const CONTENT_TYPES = ['SHORT-FORM', 'LONG-FORM'];
 const TYPES = ['PERSONAL', 'SPONSOR'];

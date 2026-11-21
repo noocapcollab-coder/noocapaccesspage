@@ -37,7 +37,7 @@ const CREATOR_BY_ID = {
   f0dbec00505d4e168e51b2fcfea21445: 'Valeri',
   '36b508e99dda8004a37f000b460c8c46': 'Dmytro',
   '370508e99dda807b9554000ba747fde7': 'Jonathan',
-  '340508e99dda80ae9625000b82f42207': 'Cindy',
+  '340508e99dda80ae9625000b82f42207': 'Harsh', // HARSH - NOOCAP IP (was Cindy's board), Nov 21
   '305508e99dda81e6af3c000b968116a6': 'Joshua',
   // database IDs (fallback)
   '28b508e99dda81738029ce0e348a06be': 'Brad',
@@ -48,7 +48,8 @@ const CREATOR_BY_ID = {
   '34a508e99dda81d0a796e8fe8eaaa4c8': 'Valeri',
   '36b508e99dda8002a2f6f80361247c48': 'Dmytro',
   '361508e99dda80718f7ae9a2c32ec1db': 'Pipeline',
-  '340508e99dda80f89ba5ca99bd68aa69': 'Cindy',
+  '340508e99dda80f89ba5ca99bd68aa69': 'Harsh',
+  '340508e99dda80469c3ee9df0342e02a': 'Harsh',
   '305508e99dda80e6afbae5075b2f3c45': 'Joshua',
 };
 
@@ -237,7 +238,7 @@ function tokenHint() {
 
 // Boards missing from the list above are named after their creator ("DASH - CHRIS", "NICOLE REELS"), so read the
 // board's title once and match a known creator name in it.
-const KNOWN_CREATORS = ['Brad', 'Chris', 'Lindsay', 'EmTech', 'Duncan', 'Valeri', 'Dmytro', 'Jonathan', 'Cindy', 'Joshua', 'David', 'Nicole'];
+const KNOWN_CREATORS = ['Brad', 'Chris', 'Lindsay', 'EmTech', 'Duncan', 'Valeri', 'Dmytro', 'Jonathan', 'Cindy', 'Joshua', 'David', 'Nicole', 'Harsh'];
 const boardNames = new Map(); // database id -> creator ('' when none matched)
 async function creatorFromBoardName(parent) {
   const dbId = bare(parent.database_id || '');
