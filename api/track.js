@@ -22,7 +22,7 @@ const TRACKER_DB = String(process.env.TRACKER_DB_ID || 'f18ddd9a6f874b62b2f50e76
 const CREATORS = ['Duncan', 'Brad', 'Lindsay', 'Chris', 'EmTech', 'Valerie', 'David', 'Nicole', 'Dmytro', 'Jonathan', 'Cindy', 'Joshua', 'Harsh'];
 const EDITORS = ['Parvez', 'Sumith', 'Utsav', 'Vicky', 'Prabal', 'Abhishek', 'PRATEEK'];
 const CONTENT_TYPES = ['SHORT-FORM', 'LONG-FORM'];
-const TYPES = ['PERSONAL', 'SPONSOR'];
+const TYPES = ['PERSONAL', 'SPONSOR', 'TRIALS'];
 const ACTIONS = ['start_claude', 'start_manual', 'claude_done', 'send_review'];
 const NOTE_HOOK = process.env.EDIT_NOTE_WEBHOOK || 'https://n8n-production-cd10f.up.railway.app/webhook/noocap-edit-note';
 
@@ -129,7 +129,7 @@ function cleanHandoff(h) {
   if (!out.creator) missing.push('the creator');
   if (!out.editor) missing.push('your name');
   if (!out.contentType) missing.push('short or long form');
-  if (!out.type) missing.push('personal or sponsor');
+  if (!out.type) missing.push('personal, sponsor or trial');
   return { handoff: out, missing };
 }
 

@@ -20,6 +20,7 @@
     --dim:#5c6878;
     --steel:#6aa9d8;
     --personal:#d9a04a;
+    --trial:#5fb3d9;
     --sponsor:#d96a9a;
     --ok:#5fb37e;
     --warn:#d9834a;
@@ -64,6 +65,7 @@
   .tag.creator{color:var(--text);border-color:#2b3a4d;background:#141d29}
   .tag.personal{color:var(--personal);border-color:#453413;background:#1e1809}
   .tag.sponsor{color:var(--sponsor);border-color:#48212f;background:#1f0f16}
+  .tag.trial{color:var(--trial);border-color:#1d3a48;background:#0c1a21}
   h1{
     font-family:'Barlow Condensed',sans-serif;
     font-weight:700;font-size:clamp(30px,7vw,46px);line-height:1.04;
@@ -349,7 +351,9 @@
   function render(v){
     var idx = stageIndex(v.status);
     var isSponsor = /sponsor/i.test(v.type || '');
-    var typeClass = isSponsor ? 'sponsor' : (v.type ? 'personal' : '');
+    // Trial reels (TYPE includes TRIALS) get their own tag so the editor knows it's a trial (Harsh, Nov 25)
+    var isTrial = !isSponsor && /trial/i.test(v.type || '');
+    var typeClass = isSponsor ? 'sponsor' : isTrial ? 'trial' : (v.type ? 'personal' : '');
 
     var rail = STAGES.map(function(s, i){
       var cls = i === idx ? 'now' : (idx > -1 && i < idx ? 'past' : '');
@@ -446,7 +450,7 @@
       creator: matchOpt(video.creator, opts.creators || DEFAULT_CREATORS),
       editor: matchOpt(video.editor || (function(){ try { return localStorage.getItem('noocap_editor'); } catch(e){ return ''; } })(), opts.editors || DEFAULT_EDITORS),
       contentType: /LONG/.test(fmt) ? 'LONG-FORM' : (/SHORT/.test(fmt) ? 'SHORT-FORM' : ''),
-      type: /SPONSOR/.test(typ) ? 'SPONSOR' : (/PERSONAL/.test(typ) ? 'PERSONAL' : '')
+      type: /SPONSOR/.test(typ) ? 'SPONSOR' : /TRIAL/.test(typ) ? 'TRIALS' : (/PERSONAL/.test(typ) ? 'PERSONAL' : '')
     };
   }
 
@@ -465,7 +469,7 @@
         selectHtml('creator','Creator', opts.creators || DEFAULT_CREATORS, draft.creator) +
         selectHtml('editor','Your name', opts.editors || DEFAULT_EDITORS, draft.editor) +
         selectHtml('contentType','Format', ['SHORT-FORM','LONG-FORM'], draft.contentType) +
-        selectHtml('type','Type', ['PERSONAL','SPONSOR'], draft.type) +
+        selectHtml('type','Type', ['PERSONAL','SPONSOR','TRIALS'], draft.type) +
       '</div>';
   }
 
